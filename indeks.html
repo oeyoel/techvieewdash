@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TechView AI Terminal - Realtime</title>
+  <title>TechView AI Terminal</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -29,7 +29,7 @@
 </head>
 <body class="flex flex-col h-screen antialiased selection:bg-accent-500 selection:text-white">
 
-  <!-- Header -->
+  <!-- Navigation -->
   <header class="h-16 flex items-center justify-between px-4 lg:px-6 border-b border-zinc-800 bg-zinc-950 z-50 shrink-0">
     <div class="flex items-center gap-3">
       <div class="hidden sm:flex p-2 bg-accent-500/20 text-accent-500 rounded-lg border border-accent-500/30">
@@ -37,21 +37,21 @@
       </div>
       <div>
         <h1 class="font-bold text-base lg:text-lg leading-tight tracking-tight">TechView AI</h1>
-        <p class="text-[9px] lg:text-[10px] text-zinc-400 uppercase tracking-widest hidden sm:block">Serverless Engine Active</p>
+        <p class="text-[9px] lg:text-[10px] text-zinc-400 uppercase tracking-widest hidden sm:block">Serverless Realtime Engine</p>
       </div>
     </div>
 
-    <!-- Search -->
+    <!-- Ticker Search -->
     <div class="flex-1 max-w-xl mx-4 lg:mx-8 relative">
       <div class="relative flex items-center w-full">
         <i data-lucide="search" class="w-4 h-4 absolute left-3 text-zinc-400"></i>
-        <input id="tickerInput" type="text" placeholder="Search tickers (e.g. BBCA, AAPL, BTCUSDT)..." value="BBCA" autocomplete="off" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-9 pr-20 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 uppercase font-mono shadow-inner transition-all"/>
+        <input id="tickerInput" type="text" placeholder="Search tickers (e.g. BBCA, AAPL, BTCUSDT)..." value="BBCA" autocomplete="off" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-9 pr-20 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-accent-500 uppercase font-mono shadow-inner transition-all"/>
         <button id="searchBtn" class="absolute right-1.5 px-3 py-1 bg-white text-black font-semibold text-xs rounded-md hover:bg-zinc-200 transition-colors cursor-pointer">Analyze</button>
       </div>
       <div id="searchSuggestions" class="hidden absolute left-0 right-0 top-full mt-2 glass-panel rounded-lg shadow-2xl max-h-64 overflow-y-auto custom-scroll z-[100]"></div>
     </div>
 
-    <!-- Status -->
+    <!-- Network Indicator -->
     <div class="flex items-center gap-2 text-xs font-medium">
       <div id="statusIndicator" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="statusDot"></span>
@@ -60,10 +60,8 @@
     </div>
   </header>
 
-  <!-- Workspace -->
+  <!-- Content Workspace -->
   <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
-    
-    <!-- Left Workspace -->
     <div class="flex-1 flex flex-col min-w-0 border-b lg:border-b-0 lg:border-r border-zinc-800">
       
       <!-- Toolbar -->
@@ -86,7 +84,7 @@
         </div>
       </div>
 
-      <!-- Price -->
+      <!-- Price Header -->
       <div class="p-4 flex justify-between items-end shrink-0">
         <div>
           <h2 id="displayTicker" class="text-2xl lg:text-3xl font-black font-mono tracking-tight text-white flex items-center gap-3">BBCA.JK<span class="hidden sm:inline px-2 py-0.5 text-xs font-semibold rounded bg-zinc-800 text-zinc-300 border border-zinc-700 font-sans tracking-normal">Equity</span></h2>
@@ -104,7 +102,7 @@
       </div>
     </div>
 
-    <!-- Right Workspace -->
+    <!-- AI Side Panel -->
     <div class="w-full lg:w-[420px] bg-zinc-950 flex flex-col overflow-y-auto custom-scroll shrink-0">
       <div class="p-5 flex flex-col gap-5">
         
@@ -202,7 +200,6 @@
       return Array.from(uniqueMap.values()).sort((a, b) => a.time.localeCompare(b.time));
     }
 
-    // Increased timeout to 12 seconds to survive Vercel cold starts
     async function safeFetch(url) {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 12000); 
@@ -227,7 +224,6 @@
       }
       const isCrypto = sym.endsWith('USDT') || sym.startsWith('BTC') || sym.startsWith('ETH') || sym.endsWith('-USD');
 
-      // 1. Binance Crypto Direct
       if (isCrypto) {
         const binanceSym = sym.replace('-', '').replace('USD', 'USDT');
         updateUIStatus('Fetching Crypto Feed...', 'yellow');
@@ -238,7 +234,6 @@
         }
       } 
       
-      // 2. Vercel Serverless API (Checks if api/proxy.js exists and works)
       updateUIStatus('Waking Vercel Serverless...', 'yellow');
       const localProxy = await safeFetch(`/api/proxy?ticker=${encodeURIComponent(sym)}`);
       if (localProxy && localProxy.chart && localProxy.chart.result && localProxy.chart.result[0].timestamp) {
@@ -252,7 +247,6 @@
           return cleanAndFormatData(parsed);
       }
 
-      // 3. Last Resort: Public Proxies
       updateUIStatus('Serverless failed. Trying public node...', 'orange');
       const proxies = [
         url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
