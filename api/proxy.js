@@ -5,27 +5,35 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Ticker is required' });
   }
 
-  try {
-    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=3y&interval=1d`;
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
+  // Dual-node fallback to bypass strict Yahoo blocks
+  const urls = [
+    `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=3y&interval=1d`,
+    `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=3y&interval=1d`
+  ];
+
+  for (let url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Origin': 'https://finance.yahoo.com',
+          'Referer': 'https://finance.yahoo.com/'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Cache successful hits for 60 seconds at the Vercel Edge for instant load times
+        res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return res.status(200).json(data);
       }
-    });
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'Upstream API blocked or ticker not found' });
+    } catch (err) {
+      console.error('Node failed, trying next...');
     }
-
-    const data = await response.json();
-    
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.status(200).json(data);
-    
-  } catch (error) {
-    res.status(500).json({ error: 'Internal Server Error' });
   }
+
+  return res.status(502).json({ error: 'Upstream data source blocked or unavailable' });
 }
