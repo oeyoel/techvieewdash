@@ -1,11 +1,10 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { ticker } = req.query;
   
   if (!ticker) {
     return res.status(400).json({ error: 'Ticker is required' });
   }
 
-  // Dual-node fallback to bypass strict Yahoo blocks
   const urls = [
     `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=3y&interval=1d`,
     `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=3y&interval=1d`
@@ -25,7 +24,6 @@ export default async function handler(req, res) {
 
       if (response.ok) {
         const data = await response.json();
-        // Cache successful hits for 60 seconds at the Vercel Edge for instant load times
         res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
         res.setHeader('Access-Control-Allow-Origin', '*');
         return res.status(200).json(data);
@@ -35,5 +33,5 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.status(502).json({ error: 'Upstream data source blocked or unavailable' });
-}
+  return res.status(502).json({ error: 'Upstream market data blocked or unavailable' });
+};
