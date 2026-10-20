@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechView AI Terminal - Realtime</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: { zinc: { 850: '#1f1f22', 900: '#18181b', 950: '#09090b' }, accent: { 500: '#3b82f6', 600: '#2563eb' } },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+    body { background-color: #09090b; color: #f4f4f5; font-family: 'Inter', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+    .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+    .glass-panel { background: rgba(24, 24, 27, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(63, 63, 70, 0.5); }
+  </style>
+</head>
+<body class="flex flex-col h-screen antialiased selection:bg-accent-500 selection:text-white">
+
+  <!-- Header -->
+  <header class="h-16 flex items-center justify-between px-4 lg:px-6 border-b border-zinc-800 bg-zinc-950 z-50 shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="hidden sm:flex p-2 bg-accent-500/20 text-accent-500 rounded-lg border border-accent-500/30">
+        <i data-lucide="line-chart" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base lg:text-lg leading-tight tracking-tight">TechView AI</h1>
+        <p class="text-[9px] lg:text-[10px] text-zinc-400 uppercase tracking-widest hidden sm:block">Serverless Engine Active</p>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="flex-1 max-w-xl mx-4 lg:mx-8 relative">
+      <div class="relative flex items-center w-full">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3 text-zinc-400"></i>
+        <input id="tickerInput" type="text" placeholder="Search tickers (e.g. BBCA, AAPL, BTCUSDT)..." value="BBCA" autocomplete="off" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-9 pr-20 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500 uppercase font-mono shadow-inner transition-all"/>
+        <button id="searchBtn" class="absolute right-1.5 px-3 py-1 bg-white text-black font-semibold text-xs rounded-md hover:bg-zinc-200 transition-colors cursor-pointer">Analyze</button>
+      </div>
+      <div id="searchSuggestions" class="hidden absolute left-0 right-0 top-full mt-2 glass-panel rounded-lg shadow-2xl max-h-64 overflow-y-auto custom-scroll z-[100]"></div>
+    </div>
+
+    <!-- Status -->
+    <div class="flex items-center gap-2 text-xs font-medium">
+      <div id="statusIndicator" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="statusDot"></span>
+        <span id="statusText" class="hidden sm:inline">System Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Workspace -->
+  <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+    
+    <!-- Left Workspace -->
+    <div class="flex-1 flex flex-col min-w-0 border-b lg:border-b-0 lg:border-r border-zinc-800">
+      
+      <!-- Toolbar -->
+      <div class="h-12 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between px-4 shrink-0 overflow-x-auto custom-scroll gap-4">
+        <div class="flex items-center gap-1 bg-zinc-950 p-1 rounded-md border border-zinc-800 shrink-0 whitespace-nowrap" id="timeframeContainer">
+          <button data-tf="1D" class="tf-btn px-3 py-1 text-xs rounded font-semibold bg-zinc-700 text-white shadow-sm cursor-pointer">1D</button>
+          <button data-tf="3D" class="tf-btn px-3 py-1 text-xs rounded font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer">3D</button>
+          <button data-tf="1W" class="tf-btn px-3 py-1 text-xs rounded font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer">1W</button>
+          <button data-tf="1M" class="tf-btn px-3 py-1 text-xs rounded font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer">1M</button>
+          <button data-tf="3M" class="tf-btn px-3 py-1 text-xs rounded font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer">3M</button>
+          <button data-tf="1Y" class="tf-btn px-3 py-1 text-xs rounded font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer">1Y</button>
+        </div>
+        
+        <div class="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+          <button class="ind-btn px-2.5 py-1 text-[11px] font-bold rounded bg-accent-500/20 text-accent-400 border border-accent-500/30 cursor-pointer" data-ind="MA200">MA200</button>
+          <button class="ind-btn px-2.5 py-1 text-[11px] font-bold rounded bg-zinc-900 text-zinc-400 border border-zinc-700 hover:bg-zinc-800 cursor-pointer" data-ind="EMA120">EMA120</button>
+          <button class="ind-btn px-2.5 py-1 text-[11px] font-bold rounded bg-zinc-900 text-zinc-400 border border-zinc-700 hover:bg-zinc-800 cursor-pointer" data-ind="EMA649">EMA649</button>
+          <button class="ind-btn px-2.5 py-1 text-[11px] font-bold rounded bg-accent-500/20 text-accent-400 border border-accent-500/30 cursor-pointer" data-ind="RSI">RSI</button>
+          <button class="ind-btn flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 cursor-pointer" data-ind="Elliott"><i data-lucide="activity" class="w-3 h-3"></i> Elliott</button>
+        </div>
+      </div>
+
+      <!-- Price -->
+      <div class="p-4 flex justify-between items-end shrink-0">
+        <div>
+          <h2 id="displayTicker" class="text-2xl lg:text-3xl font-black font-mono tracking-tight text-white flex items-center gap-3">BBCA.JK<span class="hidden sm:inline px-2 py-0.5 text-xs font-semibold rounded bg-zinc-800 text-zinc-300 border border-zinc-700 font-sans tracking-normal">Equity</span></h2>
+        </div>
+        <div class="text-right">
+          <div id="displayPrice" class="text-2xl lg:text-3xl font-black font-mono tracking-tight text-emerald-400">--</div>
+          <div id="displayChange" class="text-xs lg:text-sm font-bold mt-1 text-emerald-400">--</div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="flex-1 flex flex-col p-4 pt-0 gap-3 min-h-[350px] lg:min-h-0">
+        <div id="chartContainer" class="flex-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 relative overflow-hidden"></div>
+        <div id="rsiContainer" class="h-20 lg:h-32 w-full rounded-xl border border-zinc-800 bg-zinc-950 shrink-0 relative overflow-hidden"></div>
+      </div>
+    </div>
+
+    <!-- Right Workspace -->
+    <div class="w-full lg:w-[420px] bg-zinc-950 flex flex-col overflow-y-auto custom-scroll shrink-0">
+      <div class="p-5 flex flex-col gap-5">
+        
+        <div class="rounded-xl bg-zinc-900 border border-zinc-800 p-5 relative overflow-hidden">
+          <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -mr-10 -mt-10" id="signalGlow"></div>
+          <div class="flex justify-between items-center mb-3">
+            <span class="text-xs font-bold text-zinc-400 uppercase tracking-widest">AI Verdict</span>
+            <span id="recBadge" class="px-3 py-1 text-[10px] font-black rounded bg-emerald-500 text-black uppercase tracking-wider">--</span>
+          </div>
+          <div id="recDirectionText" class="text-2xl font-black text-emerald-400 font-mono tracking-tight mb-2">STANDBY</div>
+          <p id="recSummaryText" class="text-sm text-zinc-300 leading-relaxed font-medium">Awaiting market data...</p>
+        </div>
+
+        <div>
+          <h3 class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> Technical Diagnostics</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-zinc-900 rounded-lg p-3 border border-zinc-800"><span class="text-[10px] text-zinc-400 block mb-1 uppercase font-semibold tracking-wider">Pattern</span><span id="candlePatternText" class="font-bold text-sm text-accent-400">--</span></div>
+            <div class="bg-zinc-900 rounded-lg p-3 border border-zinc-800"><span class="text-[10px] text-zinc-400 block mb-1 uppercase font-semibold tracking-wider">Divergence</span><span id="rsiDivergenceText" class="font-bold text-sm text-emerald-400">--</span></div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="ruler" class="w-3.5 h-3.5"></i> Market Structure</h3>
+          <div class="bg-zinc-900 rounded-xl border border-zinc-800 p-1">
+            <div class="grid grid-cols-2 gap-px bg-zinc-800">
+              <div class="bg-zinc-900 p-3 space-y-2 font-mono text-xs">
+                <div class="flex justify-between text-red-400"><span>R3</span><span id="valR3">--</span></div>
+                <div class="flex justify-between text-red-400"><span>R2</span><span id="valR2">--</span></div>
+                <div class="flex justify-between text-red-400 font-bold border-b border-zinc-800 pb-1"><span>R1</span><span id="valR1">--</span></div>
+              </div>
+              <div class="bg-zinc-900 p-3 space-y-2 font-mono text-xs">
+                <div class="flex justify-between text-emerald-400 font-bold border-b border-zinc-800 pb-1"><span>S1</span><span id="valS1">--</span></div>
+                <div class="flex justify-between text-emerald-400"><span>S2</span><span id="valS2">--</span></div>
+                <div class="flex justify-between text-emerald-400"><span>S3</span><span id="valS3">--</span></div>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-px bg-zinc-800 pt-px">
+              <div class="bg-zinc-900 p-2 text-center"><span class="block text-[9px] text-zinc-500 font-sans uppercase">Fib 38.2</span><span id="fib382" class="text-xs font-mono text-zinc-300">--</span></div>
+              <div class="bg-zinc-900 p-2 text-center"><span class="block text-[9px] text-zinc-500 font-sans uppercase">Fib 50.0</span><span id="fib500" class="text-xs font-mono text-zinc-300">--</span></div>
+              <div class="bg-zinc-900 p-2 text-center"><span class="block text-[9px] text-zinc-500 font-sans uppercase">Fib 61.8</span><span id="fib618" class="text-xs font-mono text-zinc-300">--</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2"><i data-lucide="crosshair" class="w-3.5 h-3.5"></i> Trade Setup</h3>
+          <div class="flex p-1 bg-zinc-900 rounded-lg border border-zinc-800 mb-3 text-xs font-semibold">
+            <button class="persona-tab flex-1 py-1.5 rounded-md bg-white text-black shadow-sm cursor-pointer">Holder</button>
+            <button class="persona-tab flex-1 py-1.5 rounded-md text-zinc-400 hover:text-white cursor-pointer">Swinger</button>
+            <button class="persona-tab flex-1 py-1.5 rounded-md text-zinc-400 hover:text-white cursor-pointer">Scalper</button>
+          </div>
+          
+          <div class="space-y-2 font-mono text-xs pb-6">
+            <div class="flex items-center justify-between p-3 rounded-lg bg-zinc-900 border border-zinc-800"><span class="font-sans text-zinc-400 font-medium">Optimal Entry</span><span id="pEntry" class="font-bold text-accent-400">--</span></div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-zinc-900 border border-zinc-800"><span class="font-sans text-zinc-400 font-medium">Take Profit 1</span><span id="pTP1" class="font-bold text-emerald-400">--</span></div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-zinc-900 border border-zinc-800"><span class="font-sans text-zinc-400 font-medium">Take Profit 2</span><span id="pTP2" class="font-bold text-emerald-400">--</span></div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-zinc-900 border border-zinc-800"><span class="font-sans text-zinc-400 font-medium">Stop Loss</span><span id="pSL" class="font-bold text-red-400">--</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    try { lucide.createIcons(); } catch(e) {}
+
+    const state = {
+      ticker: 'BBCA.JK', timeframe: '1D', persona: 'Holder', rawOHLC: [],
+      indicators: { MA200: true, EMA120: false, EMA649: false, RSI: true, Elliott: true },
+      chart: null, rsiChart: null, series: { candle: null, ma200: null, ema120: null, ema649: null, rsi: null }
+    };
+
+    const INDO_STOCKS = ['BBCA','GOTO','BBRI','BMRI','BBNI','TLKM','ASII','UNVR','ICBP','AMRT','ANTM','PGAS','BUKA','HRUM','ADRO','MDKA'];
+
+    function cleanAndFormatData(arr) {
+      if (!arr || !Array.isArray(arr)) return [];
+      const uniqueMap = new Map();
+      for (let i = 0; i < arr.length; i++) {
+        const d = arr[i];
+        if (!d || !d.time || isNaN(d.close) || d.close <= 0) continue;
+        let dateStr = '';
+        if (typeof d.time === 'number') {
+          const ms = d.time < 20000000000 ? d.time * 1000 : d.time;
+          const dt = new Date(ms);
+          if (isNaN(dt.getTime())) continue;
+          dateStr = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+        } else if (typeof d.time === 'string') {
+          dateStr = d.time.split('T')[0]; 
+        }
+        if (dateStr && dateStr.length === 10) {
+          uniqueMap.set(dateStr, { time: dateStr, open: Number(d.open), high: Number(d.high), low: Number(d.low), close: Number(d.close) });
+        }
+      }
+      return Array.from(uniqueMap.values()).sort((a, b) => a.time.localeCompare(b.time));
+    }
+
+    // Increased timeout to 12 seconds to survive Vercel cold starts
+    async function safeFetch(url) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 12000); 
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        if (!res.ok) return null;
+        const text = await res.text();
+        try { return JSON.parse(text); } catch (e) { return null; }
+      } catch (e) {
+        clearTimeout(id);
+        return null;
+      }
+    }
+
+    async function fetchRealMarketData(ticker) {
+      updateUIStatus('Connecting Realtime Nodes...', 'yellow');
+      
+      let sym = ticker.trim().toUpperCase();
+      if (!sym.includes('.') && (INDO_STOCKS.includes(sym) || (sym.length === 4 && !sym.endsWith('USDT') && !sym.endsWith('USD')))) {
+        sym += '.JK';
+      }
+      const isCrypto = sym.endsWith('USDT') || sym.startsWith('BTC') || sym.startsWith('ETH') || sym.endsWith('-USD');
+
+      // 1. Binance Crypto Direct
+      if (isCrypto) {
+        const binanceSym = sym.replace('-', '').replace('USD', 'USDT');
+        updateUIStatus('Fetching Crypto Feed...', 'yellow');
+        const data = await safeFetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSym}&interval=1d&limit=1000`);
+        if (data && Array.isArray(data)) {
+          updateUIStatus('Live (Binance Direct)', 'green');
+          return cleanAndFormatData(data.map(d => ({ time: d[0], open: d[1], high: d[2], low: d[3], close: d[4] })));
+        }
+      } 
+      
+      // 2. Vercel Serverless API (Checks if api/proxy.js exists and works)
+      updateUIStatus('Waking Vercel Serverless...', 'yellow');
+      const localProxy = await safeFetch(`/api/proxy?ticker=${encodeURIComponent(sym)}`);
+      if (localProxy && localProxy.chart && localProxy.chart.result && localProxy.chart.result[0].timestamp) {
+          updateUIStatus(`Live (Serverless Active)`, 'green');
+          const t = localProxy.chart.result[0].timestamp;
+          const q = localProxy.chart.result[0].indicators.quote[0];
+          const parsed = [];
+          for (let i = 0; i < t.length; i++) {
+            if (q.open[i] != null && q.close[i] != null) parsed.push({ time: t[i], open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] });
+          }
+          return cleanAndFormatData(parsed);
+      }
+
+      // 3. Last Resort: Public Proxies
+      updateUIStatus('Serverless failed. Trying public node...', 'orange');
+      const proxies = [
+        url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+      ];
+
+      for (let p of proxies) {
+        const yhUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=3y&interval=1d`;
+        const res = await safeFetch(p(yhUrl));
+        if (res && res.chart && res.chart.result && res.chart.result[0].timestamp) {
+          const t = res.chart.result[0].timestamp;
+          const q = res.chart.result[0].indicators.quote[0];
+          const parsed = [];
+          for (let i = 0; i < t.length; i++) {
+            if (q.open[i] != null && q.close[i] != null) parsed.push({ time: t[i], open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] });
+          }
+          if (parsed.length > 0) {
+            updateUIStatus(`Live (Public Fallback)`, 'green');
+            return cleanAndFormatData(parsed);
+          }
+        }
+      }
+
+      updateUIStatus('Network Blocked / Ticker Not Found', 'red');
+      return [];
+    }
+
+    function updateUIStatus(text, colorStr) {
+      const colors = { yellow: 'bg-amber-500', green: 'bg-emerald-500', orange: 'bg-orange-500', red: 'bg-red-500' };
+      document.getElementById('statusText').innerText = text;
+      document.getElementById('statusDot').className = `w-2 h-2 rounded-full ${colorStr !== 'red' ? 'animate-pulse' : ''} ${colors[colorStr] || 'bg-zinc-500'}`;
+    }
+
+    function aggregateData(data, tf) {
+      if (!data || data.length === 0) return [];
+      if (tf === '1D') return data;
+      const days = { '3D': 3, '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }[tf] || 1;
+      const agg = [];
+      for (let i = 0; i < data.length; i += days) {
+        const slice = data.slice(i, i + days);
+        if (slice.length === 0) continue;
+        let h = -Infinity, l = Infinity;
+        slice.forEach(s => { if (s.high > h) h = s.high; if (s.low < l) l = s.low; });
+        agg.push({ time: slice[0].time, open: slice[0].open, high: h, low: l, close: slice[slice.length - 1].close });
+      }
+      return agg;
+    }
+
+    function calcSMA(data, p) {
+      const res = [];
+      for(let i=p-1; i<data.length; i++) { let sum = 0; for(let j=0; j<p; j++) sum += data[i-j].close; res.push({ time: data[i].time, value: sum/p }); }
+      return res;
+    }
+
+    function calcEMA(data, p) {
+      const res = []; const k = 2/(p+1); let ema = data[0].close;
+      for(let i=0; i<data.length; i++) { ema = i===0 ? data[i].close : (data[i].close*k) + (ema*(1-k)); if(i >= p-1) res.push({ time: data[i].time, value: ema }); }
+      return res;
+    }
+
+    function calcRSI(data, p=14) {
+      if(data.length < p) return [];
+      const res = []; let g=0, l=0;
+      for(let i=1; i<=p && i<data.length; i++) { let c = data[i].close - data[i-1].close; c >= 0 ? g+=c : l-=c; }
+      let ag = g/p, al = l/p;
+      for(let i=p; i<data.length; i++) {
+        let c = data[i].close - data[i-1].close;
+        ag = (ag*(p-1) + (c>=0?c:0))/p; al = (al*(p-1) + (c<0?-c:0))/p;
+        res.push({ time: data[i].time, value: 100-(100/(1+(al===0?100:ag/al))) });
+      }
+      return res;
+    }
+
+    function getElliottMarkers(ohlc) {
+      if(ohlc.length < 40) return [];
+      const s = Math.floor(ohlc.length / 8);
+      return [
+        { time: ohlc[s*1].time, position: 'aboveBar', color: '#3b82f6', shape: 'circle', text: '1' },
+        { time: ohlc[s*2].time, position: 'belowBar', color: '#3b82f6', shape: 'circle', text: '2' },
+        { time: ohlc[s*4].time, position: 'aboveBar', color: '#3b82f6', shape: 'circle', text: '3' },
+        { time: ohlc[s*5].time, position: 'belowBar', color: '#3b82f6', shape: 'circle', text: '4' },
+        { time: ohlc[s*6].time, position: 'aboveBar', color: '#3b82f6', shape: 'circle', text: '5' },
+        { time: ohlc[s*7].time, position: 'belowBar', color: '#ef4444', shape: 'square', text: 'A' },
+        { time: ohlc[Math.min(s*7+2, ohlc.length-2)].time, position: 'aboveBar', color: '#ef4444', shape: 'square', text: 'B' },
+        { time: ohlc[ohlc.length-1].time, position: 'belowBar', color: '#ef4444', shape: 'square', text: 'C' }
+      ];
+    }
+
+    function bootstrapCharts() {
+      const c1 = document.getElementById('chartContainer'), c2 = document.getElementById('rsiContainer');
+      c1.innerHTML = ''; c2.innerHTML = '';
+      const opts = { 
+        layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#71717a' },
+        grid: { vertLines: { color: '#27272a' }, horzLines: { color: '#27272a' } },
+        crosshair: { mode: 0, vertLine: { color: '#71717a', labelBackgroundColor: '#18181b' }, horzLine: { color: '#71717a', labelBackgroundColor: '#18181b' } },
+        rightPriceScale: { borderColor: '#27272a' }, timeScale: { borderColor: '#27272a', timeVisible: true }
+      };
+      state.chart = LightweightCharts.createChart(c1, opts);
+      state.series.candle = state.chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false, wickUpColor: '#10b981', wickDownColor: '#ef4444' });
+      state.series.ma200 = state.chart.addLineSeries({ color: '#3b82f6', lineWidth: 2, crosshairMarkerVisible: false });
+      state.series.ema120 = state.chart.addLineSeries({ color: '#f59e0b', lineWidth: 2, crosshairMarkerVisible: false });
+      state.series.ema649 = state.chart.addLineSeries({ color: '#ec4899', lineWidth: 2, crosshairMarkerVisible: false });
+
+      state.rsiChart = LightweightCharts.createChart(c2, { ...opts, timeScale: { visible: false } });
+      state.series.rsi = state.rsiChart.addLineSeries({ color: '#a855f7', lineWidth: 2 });
+      state.chart.timeScale().subscribeVisibleTimeRangeChange(r => { if(r) state.rsiChart.timeScale().setVisibleRange(r); });
+
+      new ResizeObserver(entries => { if(entries.length > 0 && state.chart) state.chart.applyOptions({ width: entries[0].contentRect.width, height: entries[0].contentRect.height }); }).observe(c1);
+      new ResizeObserver(entries => { if(entries.length > 0 && state.rsiChart) state.rsiChart.applyOptions({ width: entries[0].contentRect.width, height: entries[0].contentRect.height }); }).observe(c2);
+    }
+
+    async function executeDashboardEngine() {
+      try {
+        if (state.rawOHLC.length === 0) {
+          document.getElementById('displayPrice').innerText = 'Loading...';
+          state.rawOHLC = await fetchRealMarketData(state.ticker);
+        }
+
+        const data = aggregateData(state.rawOHLC, state.timeframe);
+        
+        if (!data || data.length < 5) {
+          state.series.candle.setData([]); state.series.ma200.setData([]); state.series.ema120.setData([]); state.series.ema649.setData([]); state.series.rsi.setData([]);
+          document.getElementById('displayPrice').innerText = 'N/A';
+          document.getElementById('displayChange').innerText = '--';
+          document.getElementById('recDirectionText').innerText = 'UNAVAILABLE';
+          document.getElementById('recSummaryText').innerText = 'Failed to fetch sufficient data. Ensure the "api" folder is properly created in your GitHub root directory.';
+          return;
+        }
+
+        state.series.candle.setData(data);
+        const rsiData = calcRSI(data, 14);
+        state.series.ma200.setData(state.indicators.MA200 ? calcSMA(data, 200) : []);
+        state.series.ema120.setData(state.indicators.EMA120 ? calcEMA(data, 120) : []);
+        state.series.ema649.setData(state.indicators.EMA649 ? calcEMA(data, 649) : []);
+        state.series.rsi.setData(state.indicators.RSI && rsiData.length > 0 ? rsiData : []);
+        state.series.candle.setMarkers(state.indicators.Elliott ? getElliottMarkers(data) : []);
+        state.chart.timeScale().fitContent();
+
+        const last = data[data.length-1], prev = data[data.length-2];
+        const pct = (((last.close - prev.close) / prev.close) * 100).toFixed(2);
+        
+        let symStr = state.ticker.toUpperCase();
+        if(symStr.endsWith('.JK')) symStr = symStr.replace('.JK', '');
+        document.getElementById('displayTicker').innerHTML = `${symStr} <span class="hidden sm:inline px-2 py-0.5 text-xs font-semibold rounded bg-zinc-800 text-zinc-300 border border-zinc-700 font-sans tracking-normal">${symStr.includes('USDT') || symStr.includes('BTC') ? 'Crypto' : 'Equity'}</span>`;
+        document.getElementById('displayPrice').innerText = `$${last.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+        document.getElementById('displayChange').innerText = `${pct >= 0 ? '+' : ''}${pct}%`;
+        document.getElementById('displayChange').className = `text-xs lg:text-sm font-bold mt-1 ${pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+
+        let rh = -Infinity, rl = Infinity;
+        data.slice(-30).forEach(c => { if(c.high > rh) rh = c.high; if(c.low < rl) rl = c.low; });
+        const diff = rh - rl;
+        
+        const lvls = { R3: last.close + diff*0.3, R2: last.close + diff*0.18, R1: last.close + diff*0.08, S1: Math.max(0.01, last.close - diff*0.08), S2: Math.max(0.01, last.close - diff*0.18), S3: Math.max(0.01, last.close - diff*0.3), f382: rh - diff*0.382, f500: rh - diff*0.5, f618: rh - diff*0.618 };
+        ['R3','R2','R1','S1','S2','S3'].forEach(k => document.getElementById(`val${k}`).innerText = `$${lvls[k].toFixed(2)}`);
+        document.getElementById('fib382').innerText = `$${lvls.f382.toFixed(2)}`; document.getElementById('fib500').innerText = `$${lvls.f500.toFixed(2)}`; document.getElementById('fib618').innerText = `$${lvls.f618.toFixed(2)}`;
+
+        const body = Math.abs(last.close - last.open), range = last.high - last.low;
+        let p = 'Consolidating';
+        if (range > 0 && body/range < 0.1) p = 'Doji'; else if (last.close > prev.high && last.open < prev.low) p = 'Bullish Engulfing'; else if (last.close < prev.low && last.open > prev.high) p = 'Bearish Engulfing';
+        
+        let d = 'None';
+        if (rsiData.length > 10) {
+          const r1 = rsiData[rsiData.length-10]?.value || 50, r2 = rsiData[rsiData.length-1]?.value || 50;
+          const p1 = data[data.length-10].close, p2 = last.close;
+          if (p2 < p1 && r2 > r1) d = 'Bullish Divergence'; else if (p2 > p1 && r2 < r1) d = 'Bearish Divergence';
+        }
+        document.getElementById('candlePatternText').innerText = p; document.getElementById('rsiDivergenceText').innerText = d;
+
+        const isLong = d === 'Bullish Divergence' || last.close > lvls.f500;
+        document.getElementById('recBadge').innerText = isLong ? 'LONG' : 'SHORT';
+        document.getElementById('recBadge').className = `px-3 py-1 text-[10px] font-black rounded ${isLong ? 'bg-emerald-500 text-black' : 'bg-red-500 text-white'} uppercase tracking-wider`;
+        document.getElementById('recDirectionText').innerText = isLong ? 'BULLISH' : 'BEARISH';
+        document.getElementById('recDirectionText').className = `text-2xl font-black font-mono tracking-tight mb-2 ${isLong ? 'text-emerald-400' : 'text-red-400'}`;
+        document.getElementById('signalGlow').className = `absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-10 -mt-10 ${isLong ? 'bg-emerald-500/10' : 'bg-red-500/10'}`;
+        document.getElementById('recSummaryText').innerText = isLong ? 'Technical strength confirmed above median Fib levels.' : 'Technical distribution ongoing under key support structure.';
+
+        let ent, tp1, tp2, sl, px = last.close;
+        if(state.persona === 'Holder') { ent=`$${(px*0.97).toFixed(2)} - $${px.toFixed(2)}`; tp1=`$${(px*1.25).toFixed(2)}`; tp2=`$${(px*1.5).toFixed(2)}`; sl=`$${(px*0.85).toFixed(2)}`; }
+        else if(state.persona === 'Swinger') { ent=`$${(px*0.99).toFixed(2)} - $${px.toFixed(2)}`; tp1=`$${lvls.R1.toFixed(2)}`; tp2=`$${lvls.R2.toFixed(2)}`; sl=`$${lvls.S1.toFixed(2)}`; }
+        else { ent=`$${px.toFixed(2)}`; tp1=`$${(px*1.025).toFixed(2)}`; tp2=`$${(px*1.045).toFixed(2)}`; sl=`$${(px*0.985).toFixed(2)}`; }
+        document.getElementById('pEntry').innerText = ent; document.getElementById('pTP1').innerText = tp1; document.getElementById('pTP2').innerText = tp2; document.getElementById('pSL').innerText = sl;
+      } catch (err) {}
+    }
+
+    let searchTimeout;
+    const tInput = document.getElementById('tickerInput'), tSugg = document.getElementById('searchSuggestions');
+    tInput.addEventListener('input', (e) => {
+      const q = e.target.value.trim(); clearTimeout(searchTimeout);
+      if (q.length < 2) { tSugg.classList.add('hidden'); return; }
+      searchTimeout = setTimeout(async () => {
+        const url = `https://query2.finance.yahoo.com/1/finance/search?q=${encodeURIComponent(q)}&quotesCount=5`;
+        const data = await safeFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+        if (data && data.quotes && data.quotes.length > 0) {
+          tSugg.innerHTML = data.quotes.map(item => `<div class="px-4 py-2.5 hover:bg-zinc-800 cursor-pointer flex justify-between items-center border-b border-zinc-800/50" onclick="window.loadSymbol('${item.symbol}')"><div><span class="font-bold text-accent-400 font-mono text-sm">${item.symbol}</span><span class="text-zinc-400 ml-2 text-xs">${item.shortname || ''}</span></div><span class="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-500 border border-zinc-700 font-medium uppercase">${item.exchange || 'EQ'}</span></div>`).join('');
+          tSugg.classList.remove('hidden');
+        } else tSugg.classList.add('hidden');
+      }, 300);
+    });
+
+    window.loadSymbol = (sym) => { tInput.value = sym; tSugg.classList.add('hidden'); state.ticker = sym; state.rawOHLC = []; executeDashboardEngine(); };
+    document.addEventListener('click', (e) => { if (!tInput.contains(e.target) && !tSugg.contains(e.target)) tSugg.classList.add('hidden'); });
+    document.getElementById('searchBtn').addEventListener('click', () => { if (tInput.value) window.loadSymbol(tInput.value); });
+    tInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('searchBtn').click(); });
+
+    document.getElementById('timeframeContainer').addEventListener('click', (e) => {
+      if (e.target.classList.contains('tf-btn')) {
+        document.querySelectorAll('.tf-btn').forEach(b => b.className = 'tf-btn px-3 py-1 text-xs rounded font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer');
+        e.target.className = 'tf-btn px-3 py-1 text-xs rounded font-semibold bg-zinc-700 text-white shadow-sm cursor-pointer';
+        state.timeframe = e.target.getAttribute('data-tf'); executeDashboardEngine();
+      }
+    });
+
+    document.querySelectorAll('.persona-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        document.querySelectorAll('.persona-tab').forEach(t => t.className = 'persona-tab flex-1 py-1.5 rounded-md text-zinc-400 hover:text-white cursor-pointer');
+        e.target.className = 'persona-tab flex-1 py-1.5 rounded-md bg-white text-black shadow-sm cursor-pointer';
+        state.persona = e.target.innerText; executeDashboardEngine();
+      });
+    });
+
+    document.querySelectorAll('.ind-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const ind = e.currentTarget.getAttribute('data-ind'); state.indicators[ind] = !state.indicators[ind]; const isActive = state.indicators[ind];
+        e.currentTarget.className = ind === 'Elliott' ? `ind-btn flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded cursor-pointer ${isActive ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-zinc-900 text-zinc-400 border border-zinc-700 hover:bg-zinc-800'}` : `ind-btn px-2.5 py-1 text-[11px] font-bold rounded cursor-pointer ${isActive ? 'bg-accent-500/20 text-accent-400 border border-accent-500/30' : 'bg-zinc-900 text-zinc-400 border border-zinc-700 hover:bg-zinc-800'}`;
+        executeDashboardEngine();
+      });
+    });
+
+    window.addEventListener('load', () => { bootstrapCharts(); executeDashboardEngine(); });
+  </script>
+</body>
+</html>
